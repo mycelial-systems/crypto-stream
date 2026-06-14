@@ -1,8 +1,5 @@
 import { webcrypto } from '@bicycle-codes/one-webcrypto'
-import {
-    randomBuf,
-    joinBufs,
-} from '@bicycle-codes/crypto-util'
+import { randomBuf, joinBufs } from './util.js'
 import base64 from 'base64-js'
 import {
     decryptStream,

@@ -27,7 +27,6 @@
     "base64-js": "^1.5.1"
   },
   "devDependencies": {
-    "@bicycle-codes/crypto-util": "^0.2.8",
     "@substrate-system/debug": "^0.9.64",
     "@preact/preset-vite": "^2.10.5",
     "@preact/signals": "^2.9.1",

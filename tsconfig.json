@@ -4,7 +4,6 @@
     "module": "NodeNext",
     "target": "ES2022",
     "moduleResolution": "nodenext",
-    "esModuleInterop": false,
     "lib": ["ES2022", "DOM", "WebWorker"],
     "allowJs": false,
     "skipLibCheck": true,
