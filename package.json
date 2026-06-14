@@ -70,7 +70,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/substrate-system/crypto-stream.git"
+    "url": "git+https://github.com/mycelial-systems/crypto-stream.git"
   },
   "keywords": [
     "cryptography",
@@ -79,8 +79,8 @@
     "browser"
   ],
   "bugs": {
-    "url": "https://github.com/substrate-system/crypto-stream/issues"
+    "url": "https://github.com/mycelial-systems/crypto-stream/issues"
   },
-  "homepage": "https://github.com/substrate-system/crypto-stream",
-  "license": "MIT"
+  "homepage": "https://github.com/mycelial-systems/crypto-stream",
+  "license": "SEE LICENSE IN LICENSE"
 }

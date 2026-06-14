@@ -1,11 +1,12 @@
 # crypto stream
-![tests](https://github.com/mycelial-systems/crypto-stream/actions/workflows/nodejs.yml/badge.svg)
+[![tests](https://img.shields.io/github/actions/workflow/status/mycelial-systems/crypto-stream/nodejs.yml?style=flat-square)](https://github.com/mycelial-systems/crypto-stream/actions/workflows/nodejs.yml)
 [![module](https://img.shields.io/badge/module-ESM%2FCJS-blue?style=flat-square)](README.md)
 [![types](https://img.shields.io/npm/types/@substrate-system/crypto-stream?style=flat-square)](README.md)
 [![semantic versioning](https://img.shields.io/badge/semver-2.0.0-blue?logo=semver&style=flat-square)](https://semver.org/)
 [![Common Changelog](https://nichoth.github.io/badge/common-changelog.svg)](./CHANGELOG.md)
 [![install size](https://flat.badgen.net/packagephobia/install/@substrate-system/crypto-stream?cache-control=no-cache)](https://packagephobia.com/result?p=@substrate-system/crypto-stream)
-[![license](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](LICENSE)
+[![license](https://img.shields.io/badge/license-Big_Time-blue?style=flat-square)](LICENSE)
+
 
 Streaming encryption for the browser, based on
 [Encrypted Content-Encoding for HTTP (RFC 8188)](https://tools.ietf.org/html/rfc8188)
