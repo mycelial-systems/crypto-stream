@@ -27,26 +27,26 @@
     "base64-js": "^1.5.1"
   },
   "devDependencies": {
-    "@bicycle-codes/crypto-util": "^0.2.7",
+    "@bicycle-codes/crypto-util": "^0.2.8",
     "@substrate-system/debug": "^0.9.64",
-    "@preact/preset-vite": "^2.9.4",
-    "@preact/signals": "^2.0.0",
-    "@substrate-system/tapzero": "^0.10.13",
-    "@typescript-eslint/eslint-plugin": "^8.0.0",
-    "@typescript-eslint/parser": "^8.0.0",
-    "auto-changelog": "^2.4.0",
-    "esbuild": "^0.27.0",
+    "@preact/preset-vite": "^2.10.5",
+    "@preact/signals": "^2.9.1",
+    "@substrate-system/tapzero": "^0.10.16",
+    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.0",
+    "auto-changelog": "^2.6.0",
+    "esbuild": "^0.28.1",
     "eslint": "^8.57.0",
     "eslint-config-standard": "^17.1.0",
     "htm": "^3.1.1",
     "markdown-toc": "^1.2.0",
     "postcss-nesting": "^14.0.0",
-    "preact": "^10.19.6",
+    "preact": "^10.29.2",
     "tap-spec": "^5.0.0",
     "tape-run": "^11.0.0",
-    "typedoc": "^0.28.1",
-    "typescript": "^5.7.2",
-    "uint8arrays": "^5.1.0"
+    "typedoc": "^0.28.19",
+    "typescript": "^6.0.3",
+    "uint8arrays": "^6.1.1"
   },
   "exports": {
     ".": {
