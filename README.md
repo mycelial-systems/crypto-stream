@@ -18,10 +18,10 @@ This uses the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/
 
 <!-- toc -->
 
-- [install](#install)
-- [fork](#fork)
-- [example](#example)
-  * [example with blobs](#example-with-blobs)
+- [Install](#install)
+- [Fork](#fork)
+- [Example](#example)
+  * [Example With Blobs](#example-with-blobs)
 - [API](#api)
   * [`new Keychain([key, [salt]])`](#new-keychainkey-salt)
   * [`keychain.key`](#keychainkey)
