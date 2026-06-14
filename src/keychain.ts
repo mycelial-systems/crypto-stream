@@ -1,12 +1,12 @@
-import { webcrypto } from '@bicycle-codes/one-webcrypto'
-import { randomBuf, joinBufs } from './util.js'
-import base64 from 'base64-js'
+import { webcrypto } from '@substrate-system/one-webcrypto'
+import * as u from 'uint8arrays'
 import {
     decryptStream,
     decryptStreamRange,
     encryptStream,
     KEY_LENGTH,
 } from './ece.js'
+import { randomBuf, joinBufs, asBufferSource } from './util.js'
 
 export {
     encryptedSize,
@@ -17,8 +17,8 @@ const IV_LENGTH = 12
 
 const encoder = new TextEncoder()
 
-function arrayToB64 (array:Uint8Array) {
-    return base64.fromByteArray(array)
+function arrayToB64 (array:Uint8Array):string {
+    return u.toString(array, 'base64pad')
 }
 
 /**
@@ -27,21 +27,20 @@ function arrayToB64 (array:Uint8Array) {
  * @returns `base64url` encoded string
  */
 function arrayToB64Url (array:Uint8Array):string {
-    return base64
-        .fromByteArray(array)
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '')
+    return u.toString(array, 'base64url')
 }
 
-function b64ToArray (str:string):Uint8Array {
-    return base64.toByteArray(str + '==='.slice((str.length + 3) % 4))
+function b64ToArray (str:string):Uint8Array<ArrayBuffer> {
+    // Accept both base64 and base64url input by normalizing url-safe chars.
+    return u.fromString(str.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
 }
 
-function decodeBits (bitsB64?:Uint8Array|string|null):Uint8Array {
+function decodeBits (
+    bitsB64?:Uint8Array|string|null
+):Uint8Array<ArrayBuffer> {
     let result
     if (bitsB64 instanceof Uint8Array) {
-        result = bitsB64
+        result = asBufferSource(bitsB64)
     } else if (typeof bitsB64 === 'string') {
         result = b64ToArray(bitsB64)
     } else if (bitsB64 == null) {
@@ -57,8 +56,8 @@ function decodeBits (bitsB64?:Uint8Array|string|null):Uint8Array {
 }
 
 export class Keychain {
-    key:Uint8Array
-    salt:Uint8Array
+    key:Uint8Array<ArrayBuffer>
+    salt:Uint8Array<ArrayBuffer>
     mainKeyPromise:Promise<CryptoKey>
     metaKeyPromise:Promise<CryptoKey>
     authTokenPromise:Promise<Uint8Array>
@@ -227,10 +226,10 @@ export class Keychain {
         const encryptedRecordBuf = await webcrypto.subtle.encrypt(
             {
                 name: 'AES-GCM',
-                iv,
+                iv: asBufferSource(iv),
             },
             await this.generateKey(opts?.size),
-            bytes
+            asBufferSource(bytes)
         )
 
         return joinBufs(iv, encryptedRecordBuf)
@@ -334,7 +333,7 @@ export class Keychain {
             throw new TypeError('`meta` should be Uint8Array')
         }
 
-        const iv:Uint8Array = webcrypto.getRandomValues(new Uint8Array(IV_LENGTH))
+        const iv = webcrypto.getRandomValues(new Uint8Array(IV_LENGTH))
         const metaKey:CryptoKey = await this.metaKeyPromise
 
         const encryptedMetaBuf:ArrayBuffer = await webcrypto.subtle.encrypt(
@@ -344,7 +343,7 @@ export class Keychain {
                 tagLength: 128
             },
             metaKey,
-            meta
+            asBufferSource(meta)
         )
 
         const encryptedMeta = new Uint8Array(encryptedMetaBuf)

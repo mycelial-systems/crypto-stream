@@ -1,6 +1,6 @@
 import { test } from '@substrate-system/tapzero'
-import base64 from 'base64-js'
-import { webcrypto } from '@bicycle-codes/one-webcrypto'
+import * as u from 'uint8arrays'
+import { webcrypto } from '@substrate-system/one-webcrypto'
 import { Keychain } from '../src/index.js'
 
 import './metadata.js'
@@ -69,8 +69,8 @@ test('keychain from given key and salt (base64)', async t => {
     const salt = webcrypto.getRandomValues(new Uint8Array(16))
 
     const keychain = new Keychain(
-        base64.fromByteArray(key),
-        base64.fromByteArray(salt)
+        u.toString(key, 'base64pad'),
+        u.toString(salt, 'base64pad')
     )
 
     t.deepEqual(keychain.key, key)
@@ -110,7 +110,7 @@ test('keychain.setAuthTokenB64', async t => {
     keychain.setAuthToken(authToken)
 
     t.deepEqual(await keychain.authToken(), authToken)
-    t.equal(await keychain.authTokenB64(), base64.fromByteArray(authToken))
+    t.equal(await keychain.authTokenB64(), u.toString(authToken, 'base64pad'))
 })
 
 test('.AuthHeader static method', async t => {

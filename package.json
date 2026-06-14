@@ -23,13 +23,13 @@
     "prepublishOnly": "npm run build && npm run build:cjs"
   },
   "dependencies": {
-    "@bicycle-codes/one-webcrypto": "^1.1.2",
-    "base64-js": "^1.5.1"
+    "@substrate-system/one-webcrypto": "^1.1.6",
+    "uint8arrays": "^6.1.1"
   },
   "devDependencies": {
-    "@substrate-system/debug": "^0.9.64",
     "@preact/preset-vite": "^2.10.5",
     "@preact/signals": "^2.9.1",
+    "@substrate-system/debug": "^0.9.64",
     "@substrate-system/tapzero": "^0.10.16",
     "@typescript-eslint/eslint-plugin": "^8.61.0",
     "@typescript-eslint/parser": "^8.61.0",
@@ -45,7 +45,7 @@
     "tape-run": "^11.0.0",
     "typedoc": "^0.28.19",
     "typescript": "^6.0.3",
-    "uint8arrays": "^6.1.1"
+    "vite": "^8.0.16"
   },
   "exports": {
     ".": {

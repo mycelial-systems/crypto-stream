@@ -6,9 +6,9 @@
 import { concatStreams } from './concat-streams.js'
 import { transformStream } from './transform-stream.js'
 import { SliceTransformer } from './slice-transformer.js'
-import { webcrypto } from '@bicycle-codes/one-webcrypto'
+import { webcrypto } from '@substrate-system/one-webcrypto'
 import { ExtractTransformer } from './extract-transformer.js'
-import { generateSalt } from './util.js'
+import { generateSalt, asBufferSource } from './util.js'
 
 const MODE_ENCRYPT = 'encrypt'
 const MODE_DECRYPT = 'decrypt'
@@ -24,7 +24,7 @@ class ECETransformer {
     mode:'encrypt'|'decrypt'
     secretKey:CryptoKey
     rs:number
-    salt:Uint8Array|null
+    salt:Uint8Array<ArrayBuffer>|null
     seekOpts:Partial<{ startSeq, endSeq, endsPrematurely }>
     seq:number
     prevChunk:Uint8Array|null
@@ -35,7 +35,7 @@ class ECETransformer {
         mode:'encrypt'|'decrypt',
         secretKey:CryptoKey,
         rs:number,
-        salt:Uint8Array|null,
+        salt:Uint8Array<ArrayBuffer>|null,
         seekOpts = {}
     ) {
         if (mode !== MODE_ENCRYPT && mode !== MODE_DECRYPT) {
@@ -98,7 +98,7 @@ class ECETransformer {
         return new Uint8Array(nonceBaseBuf)
     }
 
-    generateNonce (seq:number):Uint8Array {
+    generateNonce (seq:number):Uint8Array<ArrayBuffer> {
         if (seq > 0xffffffff) {
             throw new Error('record sequence number exceeds limit')
         }
@@ -112,7 +112,7 @@ class ECETransformer {
         return nonce
     }
 
-    pad (data:Uint8Array, isLast:boolean):Uint8Array {
+    pad (data:Uint8Array, isLast:boolean):Uint8Array<ArrayBuffer> {
         const len = data.byteLength
         if (len + TAG_LENGTH >= this.rs) {
             throw new Error('data too large for record size')
@@ -181,7 +181,7 @@ class ECETransformer {
         isLast:boolean
     ):Promise<Uint8Array> {
         const nonce = this.generateNonce(seq)
-        const paddedRecord:Uint8Array = this.pad(record, isLast)
+        const paddedRecord = this.pad(record, isLast)
 
         if (!this.key) throw new Error('not key')  // for TS
 
@@ -213,7 +213,7 @@ class ECETransformer {
                 tagLength: TAG_LENGTH * 8
             },
             this.key,
-            encryptedRecord
+            asBufferSource(encryptedRecord)
         )
         const paddedRecord = new Uint8Array(paddedRecordBuf)
         return this.unpad(paddedRecord, isLast)
@@ -244,7 +244,7 @@ class ECETransformer {
 
                 // the first chunk during decryption contains only the header
                 const header = this.readHeader(this.prevChunk)
-                this.salt = header.salt
+                this.salt = asBufferSource(header.salt)
                 if (this.rs !== null && this.rs !== header.rs) {
                     throw new Error(
                         'Record size declared in constructor does not match record size in encrypted stream'
@@ -367,7 +367,7 @@ export function encryptStream (
     input:ReadableStream,
     secretKey:CryptoKey,
     rs:number = RECORD_SIZE,
-    salt:Uint8Array = generateSalt(KEY_LENGTH)
+    salt:Uint8Array<ArrayBuffer> = generateSalt(KEY_LENGTH)
 ):ReadableStream {
     const stream = transformStream(
         input,

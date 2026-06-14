@@ -2,7 +2,7 @@ import { FunctionComponent, render } from 'preact'
 import { signal, computed, effect } from '@preact/signals'
 import { html } from 'htm/preact'
 import { Keychain } from '../src/keychain.js'
-import Debug from '@bicycle-codes/debug'
+import Debug from '@substrate-system/debug'
 const debug = Debug()
 
 // Create a new keychain. Since no arguments are specified, the key
@@ -29,7 +29,7 @@ effect(() => {
         const decryptedStream = await keychain.decryptStream(encryptedImg)
         const decryptedReader = decryptedStream.getReader()
         const { value } = await decryptedReader.read()
-        decryptedSignal.value = new Blob([value!])
+        decryptedSignal.value = new Blob([new Uint8Array(value!)])
     })()
 })
 
