@@ -47,15 +47,17 @@ This uses the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/
 
 </details>
 
-## install
+## Install
+
 ```sh
 npm i -S @substrate-system/crypto-stream
 ```
 
-## fork
+## Fork
+
 This is a fork of [SocketDev/wormhole-crypto](https://github.com/SocketDev/wormhole-crypto). Thanks [@SocketDev](https://github.com/SocketDev) team for working in open source.
 
-## example
+## Example
 
 ```js
 import { Keychain } from '@substrate-system/crypto-stream'
@@ -78,7 +80,7 @@ const plaintextStream = await keychain.decryptStream(encryptedStream)
 // to if you had used `stream`.
 ```
 
-### example with blobs
+### Example With Blobs
 
 See [./example](./example/index.ts) for a version that uses blobs + a
 local `vite` server.
@@ -363,4 +365,8 @@ Given a plaintext size, return the corresponding encrypted size.
 
 ## credits
 
-Thank you [Feross](https://github.com/feross) and [SocketDev](https://github.com/SocketDev) team for writing and publishing this.
+Thank you
+[Feross](https://github.com/feross) and
+[SocketDev](https://github.com/SocketDev)
+team for writing and publishing the original,
+[wormhole-crypto](https://github.com/SocketDev/wormhole-crypto).
