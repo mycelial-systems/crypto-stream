@@ -1,10 +1,10 @@
 # crypto stream
-![tests](https://github.com/bicycle-codes/crypto-stream/actions/workflows/nodejs.yml/badge.svg)
+![tests](https://github.com/mycelial-systems/crypto-stream/actions/workflows/nodejs.yml/badge.svg)
 [![module](https://img.shields.io/badge/module-ESM%2FCJS-blue?style=flat-square)](README.md)
-[![types](https://img.shields.io/npm/types/@bicycle-codes/crypto-stream?style=flat-square)](README.md)
+[![types](https://img.shields.io/npm/types/@substrate-system/crypto-stream?style=flat-square)](README.md)
 [![semantic versioning](https://img.shields.io/badge/semver-2.0.0-blue?logo=semver&style=flat-square)](https://semver.org/)
 [![Common Changelog](https://nichoth.github.io/badge/common-changelog.svg)](./CHANGELOG.md)
-[![install size](https://flat.badgen.net/packagephobia/install/@bicycle-codes/keys?cache-control=no-cache)](https://packagephobia.com/result?p=@bicycle-codes/keys)
+[![install size](https://flat.badgen.net/packagephobia/install/@substrate-system/crypto-stream?cache-control=no-cache)](https://packagephobia.com/result?p=@substrate-system/crypto-stream)
 [![license](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](LICENSE)
 
 Streaming encryption for the browser, based on
@@ -48,7 +48,7 @@ This uses the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/
 
 ## install
 ```sh
-npm i -S @bicycle-codes/crypto-stream
+npm i -S @substrate-system/crypto-stream
 ```
 
 ## fork
@@ -57,7 +57,7 @@ This is a fork of [SocketDev/wormhole-crypto](https://github.com/SocketDev/wormh
 ## example
 
 ```js
-import { Keychain } from '@bicycle-codes/crypto-stream'
+import { Keychain } from '@substrate-system/crypto-stream'
 
 // Create a new keychain. Since no arguments are specified, the key and salt
 // are generated.
@@ -83,7 +83,7 @@ See [./example](./example/index.ts) for a version that uses blobs + a
 local `vite` server.
 
 ```js
-import { Keychain } from '@bicycle-codes/crypto-stream'
+import { Keychain } from '@substrate-system/crypto-stream'
 
 const encryptedData = await fetch(imgUrl)
 const decryptedStream = await keychain.decryptStream(encryptedData.body)
