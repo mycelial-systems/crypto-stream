@@ -8,52 +8,10 @@ import {
 } from './ece.js'
 import { randomBuf, joinBufs, asBufferSource } from './util.js'
 
-export {
-    encryptedSize,
-    plaintextSize
-} from './ece.js'
+export { encryptedSize, plaintextSize } from './ece.js'
 
 const IV_LENGTH = 12
-
 const encoder = new TextEncoder()
-
-function arrayToB64 (array:Uint8Array):string {
-    return u.toString(array, 'base64pad')
-}
-
-/**
- * Return the given Uint8Array as a base64url string.
- * @param array Uint8Array
- * @returns `base64url` encoded string
- */
-function arrayToB64Url (array:Uint8Array):string {
-    return u.toString(array, 'base64url')
-}
-
-function b64ToArray (str:string):Uint8Array<ArrayBuffer> {
-    // Accept both base64 and base64url input by normalizing url-safe chars.
-    return u.fromString(str.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
-}
-
-function decodeBits (
-    bitsB64?:Uint8Array|string|null
-):Uint8Array<ArrayBuffer> {
-    let result
-    if (bitsB64 instanceof Uint8Array) {
-        result = asBufferSource(bitsB64)
-    } else if (typeof bitsB64 === 'string') {
-        result = b64ToArray(bitsB64)
-    } else if (bitsB64 == null) {
-        result = webcrypto.getRandomValues(new Uint8Array(16))
-    } else {
-        throw new Error('Must be Uint8Array, string, or nullish')
-    }
-
-    if (result.byteLength !== 16) {
-        throw new Error('Invalid byteLength: must be 16 bytes')
-    }
-    return result
-}
 
 export class Keychain {
     key:Uint8Array<ArrayBuffer>
@@ -111,7 +69,7 @@ export class Keychain {
 
     /**
      * Get an authentication header as a static method.
-    */
+     */
     static async AuthHeader (secretKey:string, salt:string|Uint8Array) {
         const key = decodeBits(secretKey)
         const mainKey = await webcrypto.subtle.importKey(
@@ -376,4 +334,43 @@ export class Keychain {
         const meta = new Uint8Array(metaBuf)
         return meta
     }
+}
+
+function arrayToB64 (array:Uint8Array):string {
+    return u.toString(array, 'base64pad')
+}
+
+/**
+ * Return the given Uint8Array as a base64url string.
+ * @param array Uint8Array
+ * @returns `base64url` encoded string
+ */
+function arrayToB64Url (array:Uint8Array):string {
+    return u.toString(array, 'base64url')
+}
+
+function b64ToArray (str:string):Uint8Array<ArrayBuffer> {
+    // Accept both base64 and base64url input by normalizing url-safe chars.
+    return u.fromString(str.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
+}
+
+function decodeBits (
+    bitsB64?:Uint8Array|string|null
+):Uint8Array<ArrayBuffer> {
+    let result
+    if (bitsB64 instanceof Uint8Array) {
+        result = asBufferSource(bitsB64)
+    } else if (typeof bitsB64 === 'string') {
+        result = b64ToArray(bitsB64)
+    } else if (bitsB64 == null) {
+        result = webcrypto.getRandomValues(new Uint8Array(16))
+    } else {
+        throw new Error('Must be Uint8Array, string, or nullish')
+    }
+
+    if (result.byteLength !== 16) {
+        throw new Error('Invalid byteLength: must be 16 bytes')
+    }
+
+    return result
 }
