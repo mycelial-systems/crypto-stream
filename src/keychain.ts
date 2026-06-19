@@ -5,6 +5,8 @@ import {
     decryptStreamRange,
     deriveContentSalt,
     encryptStream,
+    header as eceHeader,
+    encryptRecord as eceEncryptRecord,
     KEY_LENGTH,
     RECORD_SIZE,
 } from './ece.js'
@@ -226,6 +228,63 @@ export class Keychain {
         }
 
         return encryptStream(stream, mainKey, rs)
+    }
+
+    /**
+     * Build the 21-byte ECE header for content identified by
+     * `contentDigest`. The salt is derived internally from the digest,
+     * so this never exposes a raw salt. The header is byte-identical to
+     * the header that `encryptStream({ contentDigest, recordSize })`
+     * emits for the same input.
+     *
+     * @param opts `{ contentDigest, recordSize? }`.
+     * @returns The 21-byte header.
+     */
+    async header (
+        opts:{contentDigest:Uint8Array, recordSize?:number}
+    ):Promise<Uint8Array<ArrayBuffer>> {
+        const mainKey = await this.mainKeyPromise
+        const salt = await deriveContentSalt(mainKey, opts.contentDigest)
+        return eceHeader(salt, opts.recordSize ?? RECORD_SIZE)
+    }
+
+    /**
+     * Encrypt a single ECE record by index, byte-identical to record
+     * `seq` of `encryptStream({ contentDigest, recordSize })`. The salt
+     * is derived from `contentDigest` internally; no raw salt is
+     * accepted.
+     *
+     * Non-final records must be exactly `recordPlaintextSize(recordSize)`
+     * bytes; the final record must be `<=` that. The low-level function
+     * throws otherwise.
+     *
+     * @param seq Zero-based record index.
+     * @param plaintext The record's plaintext slice.
+     * @param opts `{ isLast, contentDigest, recordSize? }`.
+     * @returns The encrypted record bytes.
+     */
+    async encryptRecord (
+        seq:number,
+        plaintext:Uint8Array,
+        opts:{
+            isLast:boolean,
+            contentDigest:Uint8Array,
+            recordSize?:number
+        }
+    ):Promise<Uint8Array> {
+        const mainKey = await this.mainKeyPromise
+        const salt = await deriveContentSalt(
+            mainKey,
+            opts.contentDigest
+        )
+        return eceEncryptRecord(
+            mainKey,
+            seq,
+            plaintext,
+            opts.isLast,
+            salt,
+            opts.recordSize ?? RECORD_SIZE
+        )
     }
 
     /**
