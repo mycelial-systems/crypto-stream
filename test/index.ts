@@ -6,6 +6,7 @@ import { Keychain } from '../src/index.js'
 import './metadata.js'
 import './stream.js'
 import './bytes.js'
+import './seekable-write.js'
 
 let keychain:InstanceType<typeof Keychain>
 let salt:Uint8Array
