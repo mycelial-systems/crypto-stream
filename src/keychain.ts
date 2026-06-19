@@ -3,8 +3,10 @@ import * as u from 'uint8arrays'
 import {
     decryptStream,
     decryptStreamRange,
+    deriveContentSalt,
     encryptStream,
     KEY_LENGTH,
+    RECORD_SIZE,
 } from './ece.js'
 import { randomBuf, joinBufs, asBufferSource } from './util.js'
 
@@ -190,17 +192,40 @@ export class Keychain {
 
     /**
      * Take a stream, return an encrypted stream.
-     * @param stream Input stream
-     * @returns {Promise<ReadableStream>}
+     *
+     * With `opts.contentDigest`, the ECE salt is derived from the digest
+     * internally (`deriveContentSalt`), so two calls over identical input
+     * produce byte-identical ciphertext (reproducible encryption). With no
+     * opts, a fresh random salt is used (today's behavior).
+     *
+     * The salt is never accepted directly: because it is bound to the
+     * content digest, a fixed salt can never encrypt two different
+     * plaintexts (AES-GCM nonce-reuse is structurally unreachable from
+     * this API).
+     *
+     * @param stream Input plaintext stream.
+     * @param opts Optional `{ contentDigest?, recordSize? }`.
+     * @returns Encrypted stream.
      */
     async encryptStream (
-        stream:ReadableStream<Uint8Array>
+        stream:ReadableStream<Uint8Array>,
+        opts?:{
+            contentDigest?:Uint8Array,
+            recordSize?:number
+        }
     ):Promise<ReadableStream<Uint8Array>> {
         if (!(stream instanceof ReadableStream)) {
             throw new TypeError('This is not a readable stream')
         }
         const mainKey = await this.mainKeyPromise
-        return encryptStream(stream, mainKey)
+        const rs = opts?.recordSize ?? RECORD_SIZE
+
+        if (opts?.contentDigest) {
+            const salt = await deriveContentSalt(mainKey, opts.contentDigest)
+            return encryptStream(stream, mainKey, rs, salt)
+        }
+
+        return encryptStream(stream, mainKey, rs)
     }
 
     /**

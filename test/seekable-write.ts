@@ -426,3 +426,96 @@ test(
         t.ok(!equal, 'different digests should produce different salts')
     }
 )
+
+// Keychain.encryptStream reproducible tests (Task 2 - AC1.1, AC1.2, AC1.3, AC1.4)
+test(
+    'Keychain.encryptStream: reproducible with contentDigest',
+    async t => {
+        const keychain = new root.Keychain()
+        const data = new Uint8Array([1, 2, 3, 4, 5])
+        const digest = await keychain.contentDigest(data)
+
+        const encrypted1 = await streamToArray(
+            await keychain.encryptStream(arrayToStream(data), {
+                contentDigest: digest
+            })
+        )
+        const encrypted2 = await streamToArray(
+            await keychain.encryptStream(arrayToStream(data), {
+                contentDigest: digest
+            })
+        )
+
+        t.deepEqual(encrypted1, encrypted2)
+    }
+)
+
+test(
+    'Keychain.encryptStream: random salt without options',
+    async t => {
+        const keychain = new root.Keychain()
+        const data = new Uint8Array([1, 2, 3, 4, 5])
+
+        const encrypted1 = await streamToArray(
+            await keychain.encryptStream(arrayToStream(data))
+        )
+        const encrypted2 = await streamToArray(
+            await keychain.encryptStream(arrayToStream(data))
+        )
+
+        const equal = encrypted1.every((v, i) => v === encrypted2[i])
+        t.ok(!equal, 'random salt should produce different outputs')
+    }
+)
+
+test(
+    'Keychain.encryptStream: random salt round-trip',
+    async t => {
+        const keychain = new root.Keychain()
+        const data = new Uint8Array([1, 2, 3, 4, 5])
+
+        const encrypted = await streamToArray(
+            await keychain.encryptStream(arrayToStream(data))
+        )
+
+        const decrypted = await streamToArray(
+            await keychain.decryptStream(arrayToStream(encrypted))
+        )
+
+        t.deepEqual(decrypted, data)
+    }
+)
+
+test(
+    'Keychain.encryptStream: recordSize honored',
+    async t => {
+        const keychain = new root.Keychain()
+        const rs = 256
+        const data = new Uint8Array(1000)
+        webcrypto.getRandomValues(data)
+
+        const encrypted = await streamToArray(
+            await keychain.encryptStream(arrayToStream(data), { recordSize: rs })
+        )
+
+        const expectedSize = root.encryptedSize(data.length, rs)
+        t.equal(encrypted.length, expectedSize)
+    }
+)
+
+test(
+    'Keychain.encryptStream: empty input with contentDigest',
+    async t => {
+        const keychain = new root.Keychain()
+        const data = new Uint8Array(0)
+        const digest = await keychain.contentDigest(data)
+
+        const encrypted = await streamToArray(
+            await keychain.encryptStream(arrayToStream(data), {
+                contentDigest: digest
+            })
+        )
+
+        t.equal(encrypted.length, HEADER_LENGTH)
+    }
+)
