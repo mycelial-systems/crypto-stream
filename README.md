@@ -32,7 +32,10 @@ This uses the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/
   * [`keychain.authTokenB64()`](#keychainauthtokenb64)
   * [`keychain.authHeader()`](#keychainauthheader)
   * [`keychain.setAuthToken(authToken)`](#keychainsetauthtokenauthtoken)
-  * [`keychain.encryptStream(stream)`](#keychainencryptstreamstream)
+  * [`keychain.encryptStream(stream[, opts])`](#keychainencryptstreamstream-opts)
+  * [`keychain.contentDigest(content)`](#keychaincontentdigestcontent)
+  * [`keychain.header(opts)`](#keychainheaderopts)
+  * [`keychain.encryptRecord(seq, plaintext, opts)`](#keychainencryptrecordseq-plaintext-opts)
   * [`keychain.decryptStream(encryptedStream)`](#keychaindecryptstreamencryptedstream)
   * [`keychain.decryptStreamRange(offset, length, totalEncryptedLength)`](#keychaindecryptstreamrangeoffset-length-totalencryptedlength)
   * [`keychain.encryptMeta(meta)`](#keychainencryptmetameta)
@@ -41,6 +44,7 @@ This uses the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/
   * [`keychain.decryptBytes(bytes)`](#keychaindecryptbytesbytes)
   * [`plaintextSize(encryptedSize)`](#plaintextsizeencryptedsize)
   * [`encryptedSize(plaintextSize)`](#encryptedsizeplaintextsize)
+- [Reproducible & record-addressable encryption](#reproducible--record-addressable-encryption)
 - [credits](#credits)
 
 <!-- tocstop -->
@@ -223,10 +227,13 @@ The authentication token. This should be 16 bytes in length. If a `string` is
 given, then it should be a base64-encoded string. If this argument is `null`,
 then an authentication token will be automatically generated.
 
-### `keychain.encryptStream(stream)`
+### `keychain.encryptStream(stream[, opts])`
 
 ```ts
-encryptStream (stream:ReadableStream):Promise<ReadableStream>
+encryptStream (
+    stream:ReadableStream,
+    opts?:{ contentDigest?, recordSize? }
+):Promise<ReadableStream>
 ```
 
 Type: `Function`
@@ -237,11 +244,156 @@ Returns a `Promise` that resolves to a `ReadableStream` encryption stream that
 consumes the data in `stream` and returns an encrypted version. Data is
 encrypted with [Encrypted Content-Encoding for HTTP (RFC 8188)](https://tools.ietf.org/html/rfc8188).
 
+If `opts.contentDigest` is provided, the salt is derived from the digest,
+making the output reproducible — the same plaintext always produces
+identical ciphertext. Without options, a fresh random salt is used
+(default behavior; not reproducible).
+
 #### `stream`
 
 Type: `ReadableStream`
 
 A WHATWG readable stream used as a data source for the encrypted stream.
+
+#### `opts`
+
+Type: `{ contentDigest?, recordSize? }`
+
+Optional encryption options.
+
+##### `contentDigest`
+
+Type: `Uint8Array`
+
+SHA-256 digest of the plaintext (from `keychain.contentDigest()`).
+When provided, enables reproducible encryption by deriving the salt
+from the digest internally.
+
+##### `recordSize`
+
+Type: `number`
+
+ECE record size in bytes (default `RECORD_SIZE` = 65536). Record size
+affects output size and encryption granularity.
+
+### `keychain.contentDigest(content)`
+
+```ts
+contentDigest (
+    content:ReadableStream<Uint8Array>|Uint8Array|Blob
+):Promise<Uint8Array>
+```
+
+Type: `Function`
+
+Returns: `Promise<Uint8Array>`
+
+Returns a 32-byte SHA-256 digest of the plaintext. Use this digest as
+the input to `encryptStream`, `header`, and `encryptRecord` to enable
+reproducible encryption. Accepts a stream, byte array, or Blob; streams
+and Blobs are drained into memory before hashing.
+
+#### `content`
+
+Type: `ReadableStream<Uint8Array> | Uint8Array | Blob`
+
+The plaintext to hash.
+
+### `keychain.header(opts)`
+
+```ts
+header (opts:{ contentDigest, recordSize? }):Promise<Uint8Array>
+```
+
+Type: `Function`
+
+Returns: `Promise<Uint8Array>`
+
+Returns the 21-byte ECE header for content identified by the digest.
+The salt is derived internally from the content digest, so this never
+exposes a raw salt. The header is byte-identical to the header that
+`encryptStream` with the same options emits.
+
+#### `opts`
+
+Type: `{ contentDigest, recordSize? }`
+
+Required options.
+
+##### `contentDigest`
+
+Type: `Uint8Array`
+
+SHA-256 digest of the plaintext (from `keychain.contentDigest()`).
+
+##### `recordSize`
+
+Type: `number`
+
+ECE record size in bytes (default `RECORD_SIZE` = 65536).
+
+### `keychain.encryptRecord(seq, plaintext, opts)`
+
+```ts
+encryptRecord (
+    seq:number,
+    plaintext:Uint8Array,
+    opts:{
+        isLast:boolean,
+        contentDigest:Uint8Array,
+        recordSize?:number
+    }
+):Promise<Uint8Array>
+```
+
+Type: `Function`
+
+Returns: `Promise<Uint8Array>`
+
+Encrypts a single ECE record by index. The result is byte-identical to
+record `seq` of `encryptStream` with the same content and options. The
+salt is derived from the content digest internally.
+
+Non-final records must be exactly `recordPlaintextSize(recordSize)` bytes;
+the final record must be less than or equal to that. The low-level ECE
+functions throw if violated.
+
+#### `seq`
+
+Type: `number`
+
+Zero-based record index (0, 1, 2, ...).
+
+#### `plaintext`
+
+Type: `Uint8Array`
+
+The record's plaintext data.
+
+#### `opts`
+
+Type: `{ isLast, contentDigest, recordSize? }`
+
+Required options.
+
+##### `isLast`
+
+Type: `boolean`
+
+Whether this is the final record of the content.
+
+##### `contentDigest`
+
+Type: `Uint8Array`
+
+SHA-256 digest of the entire plaintext (from `keychain.contentDigest()`).
+
+##### `recordSize`
+
+Type: `number`
+
+ECE record size in bytes (default `RECORD_SIZE` = 65536). Must match
+the record size used for the header and other records.
 
 ### `keychain.decryptStream(encryptedStream)`
 
@@ -362,6 +514,66 @@ function encryptedSize (
 ```
 
 Given a plaintext size, return the corresponding encrypted size.
+
+## Reproducible & record-addressable encryption
+
+By default, `encryptStream` uses a fresh random salt for each call.
+This provides strong privacy (identical plaintexts don't leak through
+repeated ciphertext), but the same input encrypted twice produces
+different output.
+
+For use cases like deduplication and content-addressed storage, you
+need reproducible encryption: the same plaintext always produces
+identical ciphertext. This is safe only if the salt is bound to the
+plaintext, preventing a single salt from encrypting two different
+contents (which would break AES-GCM).
+
+The Keychain API enforces this binding automatically. The salt is
+never chosen by the caller; it's derived from a content digest
+(SHA-256 hash of the plaintext) via HKDF. This guarantees: a fixed
+salt pairs with exactly one plaintext.
+
+### Two-pass flow: hash, then encrypt
+
+To encrypt reproducibly, first compute the content digest, then
+pass it to the encrypt functions:
+
+```js
+// 1. Hash pass
+const digest = await keychain.contentDigest(file.stream())
+
+// 2. Encrypt pass — reproducible: same input → identical ciphertext
+const encrypted = await keychain.encryptStream(file.stream(), {
+    contentDigest: digest,
+    recordSize: rs
+})
+
+// On demand: regenerate record i byte-identically
+const rec = await keychain.encryptRecord(i, sliceI, {
+    isLast,
+    contentDigest: digest,
+    recordSize: rs
+})
+// Full ciphertext = header(21) || rec0 || rec1 || … || recLast
+const head = await keychain.header({
+    contentDigest: digest,
+    recordSize: rs
+})
+```
+
+Note that `encryptStream` with no options keeps the original random-salt
+behavior and is a single pass.
+
+### Low-level ECE building blocks
+
+The package exports low-level ECE functions at
+`@substrate-system/crypto-stream/src/ece`. These include `RECORD_SIZE`,
+`HEADER_LENGTH`, `recordPlaintextSize`, `recordCount`, `header`,
+`deriveContentSalt`, and `encryptRecord`. They take a raw salt directly
+and are footgun-prone: passing the same raw salt with two different
+plaintexts breaks AES-GCM (nonce-reuse catastrophe). Prefer the
+Keychain API, which derives the salt from the content digest and is
+nonce-reuse-safe by construction.
 
 ## credits
 
