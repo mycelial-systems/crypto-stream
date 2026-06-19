@@ -15,11 +15,11 @@ import * as root from '../src/index.js'
 
 // Build the HKDF CryptoKey that ece functions expect as `secretKey`.
 async function makeKey (
-    bytes:Uint8Array<ArrayBuffer> = webcrypto.getRandomValues(new Uint8Array(16))
+    bytes:Uint8Array = webcrypto.getRandomValues(new Uint8Array(16))
 ):Promise<CryptoKey> {
     return webcrypto.subtle.importKey(
         'raw',
-        bytes,
+        bytes as BufferSource,
         'HKDF',
         false,
         ['deriveBits', 'deriveKey']
@@ -427,7 +427,7 @@ test(
     }
 )
 
-// Keychain.encryptStream reproducible tests (Task 2 - AC1.1, AC1.2, AC1.3, AC1.4)
+// Keychain.encryptStream reproducible tests (Task 2)
 test(
     'Keychain.encryptStream: reproducible with contentDigest',
     async t => {
@@ -495,7 +495,10 @@ test(
         webcrypto.getRandomValues(data)
 
         const encrypted = await streamToArray(
-            await keychain.encryptStream(arrayToStream(data), { recordSize: rs })
+            await keychain.encryptStream(
+                arrayToStream(data),
+                { recordSize: rs }
+            )
         )
 
         const expectedSize = root.encryptedSize(data.length, rs)
