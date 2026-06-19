@@ -355,3 +355,74 @@ test('exports: deriveContentSalt', t => {
 test('exports: encryptRecord', t => {
     t.equal(typeof encryptRecord, 'function')
 })
+
+// Keychain.contentDigest tests (Task 1 - AC2.1, AC2.4, AC2.2)
+test('Keychain.contentDigest: returns 32-byte array for Uint8Array',
+    async t => {
+        const keychain = new root.Keychain()
+        const data = new Uint8Array([1, 2, 3, 4, 5])
+        const digest = await keychain.contentDigest(data)
+
+        t.equal(digest.byteLength, 32)
+        t.ok(digest instanceof Uint8Array)
+    }
+)
+
+test('Keychain.contentDigest: same input yields same digest',
+    async t => {
+        const keychain = new root.Keychain()
+        const data = new Uint8Array([1, 2, 3, 4, 5])
+
+        const digest1 = await keychain.contentDigest(data)
+        const digest2 = await keychain.contentDigest(data)
+
+        t.deepEqual(digest1, digest2)
+    }
+)
+
+test('Keychain.contentDigest: Uint8Array, stream, Blob equal',
+    async t => {
+        const keychain = new root.Keychain()
+        const data = new Uint8Array([1, 2, 3, 4, 5])
+
+        const digestBytes = await keychain.contentDigest(data)
+        const digestStream = await keychain.contentDigest(arrayToStream(data))
+        const digestBlob = await keychain.contentDigest(new Blob([data]))
+
+        t.deepEqual(digestBytes, digestStream)
+        t.deepEqual(digestBytes, digestBlob)
+    }
+)
+
+test('Keychain.contentDigest: different plaintexts yield different digests',
+    async t => {
+        const keychain = new root.Keychain()
+        const data1 = new Uint8Array([1, 2, 3, 4, 5])
+        const data2 = new Uint8Array([6, 7, 8, 9, 10])
+
+        const digest1 = await keychain.contentDigest(data1)
+        const digest2 = await keychain.contentDigest(data2)
+
+        const equal = digest1.every((v, i) => v === digest2[i])
+        t.ok(!equal, 'different plaintexts should yield different digests')
+    }
+)
+
+test(
+    'Keychain.contentDigest: different digests → different salts',
+    async t => {
+        const key = await makeKey()
+        const keychain = new root.Keychain()
+        const data1 = new Uint8Array([1, 2, 3, 4, 5])
+        const data2 = new Uint8Array([6, 7, 8, 9, 10])
+
+        const digest1 = await keychain.contentDigest(data1)
+        const digest2 = await keychain.contentDigest(data2)
+
+        const salt1 = await deriveContentSalt(key, digest1)
+        const salt2 = await deriveContentSalt(key, digest2)
+
+        const equal = salt1.every((v, i) => v === salt2[i])
+        t.ok(!equal, 'different digests should produce different salts')
+    }
+)

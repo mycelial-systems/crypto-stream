@@ -263,5 +263,5 @@ minimal primitive, maps 1:1 to a Bao/p2p chunk, and has no cross-record
 state. The range API stays as-is for reads.
 
 ```
-/ed3d-plan-and-execute:start-implementation-plan @docs/design-plans/2026-06-19-ky-wrapper.md .
+/ed3d-plan-and-execute:execute-implementation-plan /Users/nick/code/crypto-stream/docs/implementation-plans/2026-06-19-seekable-write/ /Users/nick/code/crypto-stream/
 ```

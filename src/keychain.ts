@@ -150,6 +150,45 @@ export class Keychain {
     }
 
     /**
+     * SHA-256 digest of the plaintext, used as the input to content-bound
+     * salt derivation. Accepts a stream, a byte array, or a Blob;
+     * equivalent content yields the same digest.
+     *
+     * Pass the result to `encryptStream`/`header`/`encryptRecord` as
+     * `contentDigest`. The salt is derived from this digest internally,
+     * so the Keychain API never exposes a raw salt — a fixed salt can
+     * never pair with two different plaintexts.
+     *
+     * NOTE: WebCrypto has no incremental hash, so a stream/Blob is
+     * drained into memory before hashing.
+     *
+     * @param content Plaintext as a ReadableStream, Uint8Array, or Blob.
+     * @returns 32-byte SHA-256 digest.
+     */
+    async contentDigest (
+        content:ReadableStream<Uint8Array>|Uint8Array|Blob
+    ):Promise<Uint8Array<ArrayBuffer>> {
+        let bytes:Uint8Array
+        if (content instanceof Uint8Array) {
+            bytes = content
+        } else if (content instanceof ReadableStream) {
+            bytes = new Uint8Array(await new Response(content).arrayBuffer())
+        } else if (typeof Blob !== 'undefined' && content instanceof Blob) {
+            bytes = new Uint8Array(await content.arrayBuffer())
+        } else {
+            throw new TypeError(
+                'content must be a ReadableStream, Uint8Array, or Blob'
+            )
+        }
+
+        const digest = await webcrypto.subtle.digest(
+            'SHA-256',
+            asBufferSource(bytes)
+        )
+        return new Uint8Array(digest)
+    }
+
+    /**
      * Take a stream, return an encrypted stream.
      * @param stream Input stream
      * @returns {Promise<ReadableStream>}
