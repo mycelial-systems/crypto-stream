@@ -6,7 +6,10 @@ import {
     recordPlaintextSize,
     recordCount,
     header,
-    encryptStream
+    encryptStream,
+    decryptStream,
+    deriveContentSalt,
+    encryptRecord
 } from '../src/ece.js'
 import * as root from '../src/index.js'
 
@@ -151,4 +154,208 @@ test('header: matches encryptStream output', async t => {
 
     // Compare
     t.deepEqual(standaloneHeader, streamHeader)
+})
+
+// deriveContentSalt tests (AC2.3, AC2.2, AC5.3)
+test('deriveContentSalt: deterministic for same (key, digest)', async t => {
+    const key = await makeKey()
+    const digest = new Uint8Array(32).fill(7)
+
+    const salt1 = await deriveContentSalt(key, digest)
+    const salt2 = await deriveContentSalt(key, digest)
+
+    t.equal(salt1.byteLength, 16)
+    t.equal(salt2.byteLength, 16)
+    t.deepEqual(salt1, salt2)
+})
+
+test('deriveContentSalt: different digests yield different salts', async t => {
+    const key = await makeKey()
+    const digest1 = new Uint8Array(32).fill(1)
+    const digest2 = new Uint8Array(32).fill(2)
+
+    const salt1 = await deriveContentSalt(key, digest1)
+    const salt2 = await deriveContentSalt(key, digest2)
+
+    t.equal(salt1.byteLength, 16)
+    t.equal(salt2.byteLength, 16)
+    // Assert they are not equal
+    const equal = salt1.every((v, i) => v === salt2[i])
+    t.ok(!equal, 'different digests should produce different salts')
+})
+
+test('deriveContentSalt: rejects empty digest', async t => {
+    const key = await makeKey()
+    const emptyDigest = new Uint8Array(0)
+
+    await t.throws(async () => {
+        await deriveContentSalt(key, emptyDigest)
+    })
+})
+
+// encryptRecord tests (AC5.1, AC5.2, AC5.4)
+test('encryptRecord: non-final record with wrong length throws', async t => {
+    const key = await makeKey()
+    const rs = 64
+    const max = recordPlaintextSize(rs)
+    const salt = webcrypto.getRandomValues(new Uint8Array(16))
+    const slice = new Uint8Array(max - 1)
+
+    await t.throws(async () => {
+        await encryptRecord(key, 0, slice, false, salt, rs)
+    })
+})
+
+test('encryptRecord: final record with oversized slice throws', async t => {
+    const key = await makeKey()
+    const rs = 64
+    const max = recordPlaintextSize(rs)
+    const salt = webcrypto.getRandomValues(new Uint8Array(16))
+    const slice = new Uint8Array(max + 1)
+
+    await t.throws(async () => {
+        await encryptRecord(key, 0, slice, true, salt, rs)
+    })
+})
+
+test('encryptRecord: non-16-byte salt throws Invalid salt length', async t => {
+    const key = await makeKey()
+    const rs = 64
+    const max = recordPlaintextSize(rs)
+    const slice = new Uint8Array(max)
+    const badSalt = new Uint8Array(15)
+
+    await t.throws(async () => {
+        await encryptRecord(key, 0, slice, false, badSalt, rs)
+    }, /Invalid salt length/)
+})
+
+// Helper to build per-record ciphertext
+async function buildPerRecordCiphertext (
+    plaintext:Uint8Array,
+    key:CryptoKey,
+    salt:Uint8Array,
+    rs:number
+):Promise<Uint8Array> {
+    const max = recordPlaintextSize(rs)
+    const count = recordCount(plaintext.byteLength, rs)
+
+    const chunks:Array<Uint8Array> = []
+
+    // Add header
+    chunks.push(header(salt, rs))
+
+    // Add records
+    for (let i = 0; i < count; i++) {
+        const start = i * max
+        const end = Math.min(start + max, plaintext.byteLength)
+        const slice = plaintext.subarray(start, end)
+        const isLast = i === count - 1
+
+        const encrypted = await encryptRecord(key, i, slice, isLast, salt, rs)
+        chunks.push(encrypted)
+    }
+
+    // Concatenate all chunks
+    const totalSize = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0)
+    const result = new Uint8Array(totalSize)
+    let offset = 0
+    for (const chunk of chunks) {
+        result.set(chunk, offset)
+        offset += chunk.byteLength
+    }
+
+    return result
+}
+
+// Record/stream equivalence tests (AC3.2, AC4.4)
+test('record/stream equivalence: partial final record', async t => {
+    const key = await makeKey()
+    const rs = 256
+    const salt = webcrypto.getRandomValues(new Uint8Array(16))
+    const plaintext = new Uint8Array(100)
+    webcrypto.getRandomValues(plaintext)
+
+    const perRecord = await buildPerRecordCiphertext(plaintext, key, salt, rs)
+    const streamed = await streamToArray(
+        encryptStream(arrayToStream(plaintext), key, rs, salt)
+    )
+
+    t.deepEqual(perRecord, streamed)
+})
+
+test('record/stream equivalence: single full record', async t => {
+    const key = await makeKey()
+    const rs = 256
+    const salt = webcrypto.getRandomValues(new Uint8Array(16))
+    const max = recordPlaintextSize(rs)
+    const plaintext = new Uint8Array(max)
+    webcrypto.getRandomValues(plaintext)
+
+    const perRecord = await buildPerRecordCiphertext(plaintext, key, salt, rs)
+    const streamed = await streamToArray(
+        encryptStream(arrayToStream(plaintext), key, rs, salt)
+    )
+
+    t.deepEqual(perRecord, streamed)
+})
+
+test('record/stream equivalence: multiple records non-multiple', async t => {
+    const key = await makeKey()
+    const rs = 256
+    const salt = webcrypto.getRandomValues(new Uint8Array(16))
+    const max = recordPlaintextSize(rs)
+    const plaintext = new Uint8Array(max * 2 + 50)
+    webcrypto.getRandomValues(plaintext)
+
+    const perRecord = await buildPerRecordCiphertext(plaintext, key, salt, rs)
+    const streamed = await streamToArray(
+        encryptStream(arrayToStream(plaintext), key, rs, salt)
+    )
+
+    t.deepEqual(perRecord, streamed)
+})
+
+test('record/stream equivalence: exact multiple (k*(rs-17))', async t => {
+    const key = await makeKey()
+    const rs = 256
+    const salt = webcrypto.getRandomValues(new Uint8Array(16))
+    const max = recordPlaintextSize(rs)
+    const k = 3
+    const plaintext = new Uint8Array(k * max)
+    webcrypto.getRandomValues(plaintext)
+
+    const perRecord = await buildPerRecordCiphertext(plaintext, key, salt, rs)
+    const streamed = await streamToArray(
+        encryptStream(arrayToStream(plaintext), key, rs, salt)
+    )
+
+    t.deepEqual(perRecord, streamed)
+})
+
+// Round-trip test (AC3.3)
+test('record/stream: round-trip decryption', async t => {
+    const key = await makeKey()
+    const rs = 256
+    const salt = webcrypto.getRandomValues(new Uint8Array(16))
+    const max = recordPlaintextSize(rs)
+    const plaintext = new Uint8Array(max * 2 + 50)
+    webcrypto.getRandomValues(plaintext)
+
+    const perRecord = await buildPerRecordCiphertext(plaintext, key, salt, rs)
+
+    const decrypted = await streamToArray(
+        decryptStream(arrayToStream(perRecord), key, rs)
+    )
+
+    t.deepEqual(decrypted, plaintext)
+})
+
+// Export surface completion test (AC6.1)
+test('exports: deriveContentSalt', t => {
+    t.equal(typeof deriveContentSalt, 'function')
+})
+
+test('exports: encryptRecord', t => {
+    t.equal(typeof encryptRecord, 'function')
 })

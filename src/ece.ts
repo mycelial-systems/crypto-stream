@@ -19,6 +19,7 @@ export const RECORD_SIZE = 64 * 1024
 export const HEADER_LENGTH = KEY_LENGTH + 4 + 1 // salt + record size + idlen
 
 const encoder = new TextEncoder()
+const SALT_INFO = encoder.encode('Content-Encoding: salt\0')
 
 class ECETransformer {
     mode:'encrypt'|'decrypt'
@@ -419,6 +420,96 @@ export function header (
     const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
     dv.setUint32(KEY_LENGTH, rs)
     return buf
+}
+
+/**
+ * Derive a deterministic 16-byte content salt from the secret key and a
+ * content digest, via HKDF-SHA256 with info
+ * `"Content-Encoding: salt\0" || contentDigest`.
+ *
+ * Because the digest is collision-resistant over the plaintext, a salt is
+ * cryptographically bound to exactly one content — so a fixed salt can never
+ * pair with two different plaintexts. This is what makes reproducible
+ * encryption safe under AES-GCM (no nonce reuse across distinct plaintexts).
+ *
+ * @param secretKey HKDF CryptoKey (the main secret key).
+ * @param contentDigest Digest of the plaintext (e.g. 32-byte SHA-256).
+ * @returns 16-byte content salt.
+ */
+export async function deriveContentSalt (
+    secretKey:CryptoKey,
+    contentDigest:Uint8Array
+):Promise<Uint8Array> {
+    if (contentDigest.byteLength === 0) {
+        throw new Error('empty content digest')
+    }
+
+    const infoLen = SALT_INFO.byteLength + contentDigest.byteLength
+    const info = new Uint8Array(infoLen)
+    info.set(SALT_INFO, 0)
+    info.set(contentDigest, SALT_INFO.byteLength)
+
+    const bits = await webcrypto.subtle.deriveBits(
+        {
+            name: 'HKDF',
+            hash: 'SHA-256',
+            salt: new Uint8Array(0),
+            info
+        },
+        secretKey,
+        KEY_LENGTH * 8
+    )
+
+    return new Uint8Array(bits)
+}
+
+/**
+ * Encrypt a single ECE record in isolation, byte-identical to record `seq` of
+ * the corresponding `encryptStream` output. Drives an `ECETransformer` through
+ * its existing key/nonce/record methods, so no new crypto is introduced.
+ *
+ * Non-final records must be exactly `recordPlaintextSize(rs)` bytes; the final
+ * record must be `<= recordPlaintextSize(rs)` bytes.
+ *
+ * SAFETY: the same `(secretKey, salt)` must never encrypt two different
+ * plaintexts (AES-GCM nonce reuse). This low-level function takes a raw salt;
+ * derive it from the content via `deriveContentSalt`, or use the Keychain API,
+ * which never exposes a raw salt.
+ *
+ * @param secretKey HKDF CryptoKey (the main secret key).
+ * @param seq Zero-based record index.
+ * @param plaintext The record's plaintext slice.
+ * @param isLast Whether this is the final record.
+ * @param salt 16-byte content salt (same salt as the stream's header).
+ * @param rs Record size in bytes (default RECORD_SIZE).
+ * @returns The encrypted record bytes.
+ */
+export async function encryptRecord (
+    secretKey:CryptoKey,
+    seq:number,
+    plaintext:Uint8Array,
+    isLast:boolean,
+    salt:Uint8Array<ArrayBuffer>,
+    rs:number = RECORD_SIZE
+):Promise<Uint8Array> {
+    // Validates the key and the salt length (throws 'Invalid salt length').
+    const transformer = new ECETransformer(MODE_ENCRYPT, secretKey, rs, salt)
+
+    const max = recordPlaintextSize(rs)
+    if (isLast) {
+        if (plaintext.byteLength > max) {
+            throw new Error('final record exceeds recordPlaintextSize')
+        }
+    } else {
+        if (plaintext.byteLength !== max) {
+            throw new Error('non-final record must equal recordPlaintextSize')
+        }
+    }
+
+    transformer.key = await transformer.generateKey()
+    transformer.nonceBase = await transformer.generateNonceBase()
+
+    return transformer.encryptRecord(plaintext, seq, isLast)
 }
 
 /**
