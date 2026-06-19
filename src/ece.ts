@@ -153,11 +153,7 @@ class ECETransformer {
 
     createHeader ():Uint8Array {
         if (!this.salt) throw new Error('Not salt')
-        const header = new Uint8Array(HEADER_LENGTH)
-        header.set(this.salt)
-        const dv = new DataView(header.buffer, header.byteOffset, header.byteLength)
-        dv.setUint32(KEY_LENGTH, this.rs)
-        return header
+        return header(this.salt, this.rs)
     }
 
     readHeader (buffer:Uint8Array):{ salt:Uint8Array, rs:number } {
@@ -389,6 +385,40 @@ export function recordCount (
         throw new TypeError('rs')
     }
     return Math.ceil(plaintextSize / recordPlaintextSize(rs))
+}
+
+/**
+ * Build the canonical 21-byte ECE header:
+ * `salt(16) || recordSize(uint32 BE) || idlen(0)`.
+ *
+ * This is the single source of truth for the header; the streaming encoder
+ * delegates to it, so a standalone header is byte-identical to the stream's
+ * header.
+ *
+ * SAFETY: a fixed salt must never encrypt two different plaintexts under the
+ * same key (AES-GCM nonce reuse). Prefer deriving the salt from the content
+ * (see `deriveContentSalt`) over choosing it directly. This is a low-level
+ * building block; the Keychain API does not accept a raw salt.
+ *
+ * @param salt 16-byte content salt.
+ * @param rs Record size in bytes (default RECORD_SIZE).
+ * @returns The 21-byte header.
+ */
+export function header (
+    salt:Uint8Array<ArrayBuffer>,
+    rs:number = RECORD_SIZE
+):Uint8Array<ArrayBuffer> {
+    if (salt.byteLength !== KEY_LENGTH) {
+        throw new Error('Invalid salt length')
+    }
+    if (!Number.isInteger(rs)) {
+        throw new TypeError('rs')
+    }
+    const buf = new Uint8Array(HEADER_LENGTH)
+    buf.set(salt)
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+    dv.setUint32(KEY_LENGTH, rs)
+    return buf
 }
 
 /**
