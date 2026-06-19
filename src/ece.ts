@@ -369,7 +369,8 @@ export function recordPlaintextSize (rs:number = RECORD_SIZE):number {
 
 /**
  * Number of ECE data records needed to hold `plaintextSize` bytes. Returns 0
- * for empty input — an empty stream encrypts to a header with no data records.
+ * for empty input — an empty stream encrypts to a header with no
+ * data records.
  *
  * @param plaintextSize Total plaintext length in bytes.
  * @param rs Record size in bytes (default RECORD_SIZE).
