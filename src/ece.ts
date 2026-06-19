@@ -15,8 +15,8 @@ const MODE_DECRYPT = 'decrypt'
 export const KEY_LENGTH = 16
 export const TAG_LENGTH = 16
 const NONCE_LENGTH = 12
-const RECORD_SIZE = 64 * 1024
-const HEADER_LENGTH = KEY_LENGTH + 4 + 1 // salt + record size + idlen
+export const RECORD_SIZE = 64 * 1024
+export const HEADER_LENGTH = KEY_LENGTH + 4 + 1 // salt + record size + idlen
 
 const encoder = new TextEncoder()
 
