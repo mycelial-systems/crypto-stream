@@ -261,3 +261,7 @@ two encrypted ranges and re-slices). For seeding we want the inverse and
 simpler unit: "give me record `i`." A single-record encrypt is the
 minimal primitive, maps 1:1 to a Bao/p2p chunk, and has no cross-record
 state. The range API stays as-is for reads.
+
+```
+/ed3d-plan-and-execute:start-implementation-plan @docs/design-plans/2026-06-19-ky-wrapper.md .
+```
