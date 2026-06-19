@@ -7,7 +7,7 @@ import {
     recordCount,
     header,
     encryptStream,
-    decryptStream,
+    decryptStream as eceDecryptStream,
     deriveContentSalt,
     encryptRecord
 } from '../src/ece.js'
@@ -264,6 +264,15 @@ async function buildPerRecordCiphertext (
     return result
 }
 
+// Helper to decrypt using ece.decryptStream directly
+function decryptStreamECE (
+    stream:ReadableStream<Uint8Array>,
+    key:CryptoKey,
+    rs:number = RECORD_SIZE
+):ReadableStream<Uint8Array> {
+    return eceDecryptStream(stream, key, rs)
+}
+
 // Record/stream equivalence tests (AC3.2, AC4.4)
 test('record/stream equivalence: partial final record', async t => {
     const key = await makeKey()
@@ -341,7 +350,7 @@ test('record/stream: round-trip decryption', async t => {
     const perRecord = await buildPerRecordCiphertext(plaintext, key, salt, rs)
 
     const decrypted = await streamToArray(
-        decryptStream(arrayToStream(perRecord), key, rs)
+        decryptStreamECE(arrayToStream(perRecord), key, rs)
     )
 
     t.deepEqual(decrypted, plaintext)
@@ -520,5 +529,234 @@ test(
         )
 
         t.equal(encrypted.length, HEADER_LENGTH)
+    }
+)
+
+// Task 1: Keychain.header tests (AC3.4, AC4.3)
+test(
+    'Keychain.header: returns 21-byte array',
+    async t => {
+        const keychain = new root.Keychain()
+        const data = new Uint8Array([1, 2, 3, 4, 5])
+        const digest = await keychain.contentDigest(data)
+
+        const hdr = await keychain.header({ contentDigest: digest })
+
+        t.equal(hdr.byteLength, HEADER_LENGTH)
+        t.ok(hdr instanceof Uint8Array)
+    }
+)
+
+test(
+    'Keychain.header: matches encryptStream output header',
+    async t => {
+        const keychain = new root.Keychain()
+        const data = new Uint8Array([1, 2, 3, 4, 5])
+        const digest = await keychain.contentDigest(data)
+        const rs = 256
+
+        const hdr = await keychain.header({
+            contentDigest: digest,
+            recordSize: rs
+        })
+
+        const encrypted = await streamToArray(
+            await keychain.encryptStream(arrayToStream(data), {
+                contentDigest: digest,
+                recordSize: rs
+            })
+        )
+
+        const streamHeader = encrypted.slice(0, HEADER_LENGTH)
+        t.deepEqual(hdr, streamHeader)
+    }
+)
+
+// Task 2: Keychain.encryptRecord tests (AC3.4)
+test(
+    'Keychain.encryptRecord: encrypts record',
+    async t => {
+        const keychain = new root.Keychain()
+        const rs = 256
+        const max = recordPlaintextSize(rs)
+        const plaintext = new Uint8Array(max)
+        webcrypto.getRandomValues(plaintext)
+        const digest = await keychain.contentDigest(plaintext)
+
+        const encrypted = await keychain.encryptRecord(
+            0,
+            plaintext,
+            {
+                isLast: true,
+                contentDigest: digest,
+                recordSize: rs
+            }
+        )
+
+        t.ok(encrypted instanceof Uint8Array)
+        t.ok(encrypted.byteLength > 0)
+    }
+)
+
+test(
+    'Keychain.encryptRecord: matches ece.encryptRecord',
+    async t => {
+        const keychain = new root.Keychain()
+        const rs = 256
+        const max = recordPlaintextSize(rs)
+        const plaintext = new Uint8Array(max)
+        webcrypto.getRandomValues(plaintext)
+        const digest = await keychain.contentDigest(plaintext)
+
+        const keychainEncrypted = await keychain.encryptRecord(
+            0,
+            plaintext,
+            {
+                isLast: true,
+                contentDigest: digest,
+                recordSize: rs
+            }
+        )
+
+        const salt = await deriveContentSalt(
+            await keychain['mainKeyPromise'],
+            digest
+        )
+        const eceEncrypted = await encryptRecord(
+            await keychain['mainKeyPromise'],
+            0,
+            plaintext,
+            true,
+            salt,
+            rs
+        )
+
+        t.deepEqual(keychainEncrypted, eceEncrypted)
+    }
+)
+
+// Task 3: Round-trip tests (AC3.3, AC3.4, AC4.3)
+test(
+    'Keychain round-trip: single record (default rs)',
+    async t => {
+        const keychain = new root.Keychain()
+        const data = new Uint8Array([1, 2, 3, 4, 5])
+        const digest = await keychain.contentDigest(data)
+
+        const hdr = await keychain.header({ contentDigest: digest })
+        const max = recordPlaintextSize(RECORD_SIZE)
+        const n = recordCount(data.length, RECORD_SIZE)
+
+        const chunks:Array<Uint8Array> = [hdr]
+
+        for (let i = 0; i < n; i++) {
+            const start = i * max
+            const end = Math.min(start + max, data.length)
+            const slice = data.subarray(start, end)
+            const encrypted = await keychain.encryptRecord(
+                i,
+                slice,
+                {
+                    isLast: i === n - 1,
+                    contentDigest: digest
+                }
+            )
+            chunks.push(encrypted)
+        }
+
+        const totalSize = chunks.reduce(
+            (sum, chunk) => sum + chunk.byteLength,
+            0
+        )
+        const cipher = new Uint8Array(totalSize)
+        let offset = 0
+        for (const chunk of chunks) {
+            cipher.set(chunk, offset)
+            offset += chunk.byteLength
+        }
+
+        const decrypted = await streamToArray(
+            await keychain.decryptStream(arrayToStream(cipher))
+        )
+
+        t.deepEqual(decrypted, data)
+    }
+)
+
+test(
+    'Keychain round-trip: multiple records (small rs)',
+    async t => {
+        const keychain = new root.Keychain()
+        const rs = 128
+        const data = new Uint8Array(300)
+        webcrypto.getRandomValues(data)
+        const digest = await keychain.contentDigest(data)
+
+        const hdr = await keychain.header({
+            contentDigest: digest,
+            recordSize: rs
+        })
+        const max = recordPlaintextSize(rs)
+        const n = recordCount(data.length, rs)
+
+        const chunks:Array<Uint8Array> = [hdr]
+
+        for (let i = 0; i < n; i++) {
+            const start = i * max
+            const end = Math.min(start + max, data.length)
+            const slice = data.subarray(start, end)
+            const encrypted = await keychain.encryptRecord(
+                i,
+                slice,
+                {
+                    isLast: i === n - 1,
+                    contentDigest: digest,
+                    recordSize: rs
+                }
+            )
+            chunks.push(encrypted)
+        }
+
+        const totalSize = chunks.reduce(
+            (sum, chunk) => sum + chunk.byteLength,
+            0
+        )
+        const cipher = new Uint8Array(totalSize)
+        let offset = 0
+        for (const chunk of chunks) {
+            cipher.set(chunk, offset)
+            offset += chunk.byteLength
+        }
+
+        const mainKey = await keychain['mainKeyPromise']
+        const decrypted = await streamToArray(
+            decryptStreamECE(arrayToStream(cipher), mainKey, rs)
+        )
+
+        t.deepEqual(decrypted, data)
+    }
+)
+
+test(
+    'Keychain round-trip: empty input',
+    async t => {
+        const keychain = new root.Keychain()
+        const data = new Uint8Array(0)
+        const digest = await keychain.contentDigest(data)
+
+        const hdr = await keychain.header({
+            contentDigest: digest
+        })
+        const n = recordCount(data.length)
+
+        t.equal(n, 0, 'empty input should have 0 records')
+
+        const cipher = hdr
+
+        const decrypted = await streamToArray(
+            await keychain.decryptStream(arrayToStream(cipher))
+        )
+
+        t.equal(decrypted.length, 0)
     }
 )
