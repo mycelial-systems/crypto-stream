@@ -439,7 +439,7 @@ export function header (
 export async function deriveContentSalt (
     secretKey:CryptoKey,
     contentDigest:Uint8Array
-):Promise<Uint8Array> {
+):Promise<Uint8Array<ArrayBuffer>> {
     if (contentDigest.byteLength === 0) {
         throw new Error('empty content digest')
     }

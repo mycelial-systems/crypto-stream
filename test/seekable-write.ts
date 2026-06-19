@@ -15,7 +15,7 @@ import * as root from '../src/index.js'
 
 // Build the HKDF CryptoKey that ece functions expect as `secretKey`.
 async function makeKey (
-    bytes:Uint8Array = webcrypto.getRandomValues(new Uint8Array(16))
+    bytes:Uint8Array<ArrayBuffer> = webcrypto.getRandomValues(new Uint8Array(16))
 ):Promise<CryptoKey> {
     return webcrypto.subtle.importKey(
         'raw',
@@ -179,7 +179,6 @@ test('deriveContentSalt: different digests yield different salts', async t => {
 
     t.equal(salt1.byteLength, 16)
     t.equal(salt2.byteLength, 16)
-    // Assert they are not equal
     const equal = salt1.every((v, i) => v === salt2[i])
     t.ok(!equal, 'different digests should produce different salts')
 })
@@ -234,7 +233,7 @@ test('encryptRecord: non-16-byte salt throws Invalid salt length', async t => {
 async function buildPerRecordCiphertext (
     plaintext:Uint8Array,
     key:CryptoKey,
-    salt:Uint8Array,
+    salt:Uint8Array<ArrayBuffer>,
     rs:number
 ):Promise<Uint8Array> {
     const max = recordPlaintextSize(rs)
@@ -242,10 +241,8 @@ async function buildPerRecordCiphertext (
 
     const chunks:Array<Uint8Array> = []
 
-    // Add header
     chunks.push(header(salt, rs))
 
-    // Add records
     for (let i = 0; i < count; i++) {
         const start = i * max
         const end = Math.min(start + max, plaintext.byteLength)
@@ -256,7 +253,6 @@ async function buildPerRecordCiphertext (
         chunks.push(encrypted)
     }
 
-    // Concatenate all chunks
     const totalSize = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0)
     const result = new Uint8Array(totalSize)
     let offset = 0
