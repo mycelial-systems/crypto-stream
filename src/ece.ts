@@ -356,6 +356,42 @@ export function plaintextSize (
 }
 
 /**
+ * Plaintext bytes that fit in one ECE record for the given record size.
+ * Equals `rs - TAG_LENGTH - 1` (the 16-byte AES-GCM tag plus the 1-byte
+ * padding delimiter).
+ *
+ * @param rs Record size in bytes (default RECORD_SIZE).
+ * @returns Plaintext bytes per record.
+ */
+export function recordPlaintextSize (rs:number = RECORD_SIZE):number {
+    if (!Number.isInteger(rs)) {
+        throw new TypeError('rs')
+    }
+    return rs - TAG_LENGTH - 1
+}
+
+/**
+ * Number of ECE data records needed to hold `plaintextSize` bytes. Returns 0
+ * for empty input — an empty stream encrypts to a header with no data records.
+ *
+ * @param plaintextSize Total plaintext length in bytes.
+ * @param rs Record size in bytes (default RECORD_SIZE).
+ * @returns Record count (0 when plaintextSize is 0).
+ */
+export function recordCount (
+    plaintextSize:number,
+    rs:number = RECORD_SIZE
+):number {
+    if (!Number.isInteger(plaintextSize)) {
+        throw new TypeError('plaintextSize')
+    }
+    if (!Number.isInteger(rs)) {
+        throw new TypeError('rs')
+    }
+    return Math.ceil(plaintextSize / recordPlaintextSize(rs))
+}
+
+/**
  * Given a plaintext stream `input`, return an encrypted stream.
  *
  * input:     a ReadableStream containing data to be transformed
