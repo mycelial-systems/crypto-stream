@@ -115,12 +115,13 @@ function Component () {
 Reads use
 [`decryptStreamRange`](#keychaindecryptstreamrangeoffset-length-totalencryptedlength),
 which decrypts an arbitrary byte range without reading the whole
-ciphertext. Writes use *reproducible, record-addressable* encryption: the
-same plaintext always encrypts to identical bytes, and you can regenerate
-any single record on demand without re-encrypting the rest. That is what
-lets a peer seed a large file (for example, over WebRTC) without buffering
-the whole ciphertext — hash the content once, then hand out individual
-records as they are requested.
+ciphertext.
+
+Writes use *reproducible, record-addressable* encryption. The same plaintext
+always encrypts to identical bytes, and you can regenerate any single record
+on demand without re-encrypting the rest. That is what lets a peer seed a
+large file (for example, over WebRTC) without buffering the whole ciphertext.
+Hash the content once, then hand out individual records as they are requested.
 
 ```js
 import { Keychain } from '@substrate-system/crypto-stream'
