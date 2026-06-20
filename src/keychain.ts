@@ -3,8 +3,12 @@ import * as u from 'uint8arrays'
 import {
     decryptStream,
     decryptStreamRange,
+    deriveContentSalt,
     encryptStream,
+    header as eceHeader,
+    encryptRecord as eceEncryptRecord,
     KEY_LENGTH,
+    RECORD_SIZE,
 } from './ece.js'
 import { randomBuf, joinBufs, asBufferSource } from './util.js'
 
@@ -150,18 +154,137 @@ export class Keychain {
     }
 
     /**
+     * SHA-256 digest of the plaintext, used as the input to content-bound
+     * salt derivation. Accepts a stream, a byte array, or a Blob;
+     * equivalent content yields the same digest.
+     *
+     * Pass the result to `encryptStream`/`header`/`encryptRecord` as
+     * `contentDigest`. The salt is derived from this digest internally,
+     * so the Keychain API never exposes a raw salt — a fixed salt can
+     * never pair with two different plaintexts.
+     *
+     * NOTE: WebCrypto has no incremental hash, so a stream/Blob is
+     * drained into memory before hashing.
+     *
+     * @param content Plaintext as a ReadableStream, Uint8Array, or Blob.
+     * @returns 32-byte SHA-256 digest.
+     */
+    async contentDigest (
+        content:ReadableStream<Uint8Array>|Uint8Array|Blob
+    ):Promise<Uint8Array<ArrayBuffer>> {
+        let bytes:Uint8Array
+        if (content instanceof Uint8Array) {
+            bytes = content
+        } else if (content instanceof ReadableStream) {
+            bytes = new Uint8Array(await new Response(content).arrayBuffer())
+        } else if (typeof Blob !== 'undefined' && content instanceof Blob) {
+            bytes = new Uint8Array(await content.arrayBuffer())
+        } else {
+            throw new TypeError(
+                'content must be a ReadableStream, Uint8Array, or Blob'
+            )
+        }
+
+        const digest = await webcrypto.subtle.digest(
+            'SHA-256',
+            asBufferSource(bytes)
+        )
+        return new Uint8Array(digest)
+    }
+
+    /**
      * Take a stream, return an encrypted stream.
-     * @param stream Input stream
-     * @returns {Promise<ReadableStream>}
+     *
+     * With `opts.contentDigest`, the ECE salt is derived from the digest
+     * internally (`deriveContentSalt`), so two calls over identical input
+     * produce byte-identical ciphertext (reproducible encryption). With no
+     * opts, a fresh random salt is used (today's behavior).
+     *
+     * The salt is never accepted directly: because it is bound to the
+     * content digest, a fixed salt can never encrypt two different
+     * plaintexts (AES-GCM nonce-reuse is structurally unreachable from
+     * this API).
+     *
+     * @param stream Input plaintext stream.
+     * @param opts Optional `{ contentDigest?, recordSize? }`.
+     * @returns Encrypted stream.
      */
     async encryptStream (
-        stream:ReadableStream<Uint8Array>
+        stream:ReadableStream<Uint8Array>,
+        opts?:{
+            contentDigest?:Uint8Array,
+            recordSize?:number
+        }
     ):Promise<ReadableStream<Uint8Array>> {
         if (!(stream instanceof ReadableStream)) {
             throw new TypeError('This is not a readable stream')
         }
         const mainKey = await this.mainKeyPromise
-        return encryptStream(stream, mainKey)
+        const rs = opts?.recordSize ?? RECORD_SIZE
+
+        if (opts?.contentDigest) {
+            const salt = await deriveContentSalt(mainKey, opts.contentDigest)
+            return encryptStream(stream, mainKey, rs, salt)
+        }
+
+        return encryptStream(stream, mainKey, rs)
+    }
+
+    /**
+     * Build the 21-byte ECE header for content identified by
+     * `contentDigest`. The salt is derived internally from the digest,
+     * so this never exposes a raw salt. The header is byte-identical to
+     * the header that `encryptStream({ contentDigest, recordSize })`
+     * emits for the same input.
+     *
+     * @param opts `{ contentDigest, recordSize? }`.
+     * @returns The 21-byte header.
+     */
+    async header (
+        opts:{contentDigest:Uint8Array, recordSize?:number}
+    ):Promise<Uint8Array<ArrayBuffer>> {
+        const mainKey = await this.mainKeyPromise
+        const salt = await deriveContentSalt(mainKey, opts.contentDigest)
+        return eceHeader(salt, opts.recordSize ?? RECORD_SIZE)
+    }
+
+    /**
+     * Encrypt a single ECE record by index, byte-identical to record
+     * `seq` of `encryptStream({ contentDigest, recordSize })`. The salt
+     * is derived from `contentDigest` internally; no raw salt is
+     * accepted.
+     *
+     * Non-final records must be exactly `recordPlaintextSize(recordSize)`
+     * bytes; the final record must be `<=` that. The low-level function
+     * throws otherwise.
+     *
+     * @param seq Zero-based record index.
+     * @param plaintext The record's plaintext slice.
+     * @param opts `{ isLast, contentDigest, recordSize? }`.
+     * @returns The encrypted record bytes.
+     */
+    async encryptRecord (
+        seq:number,
+        plaintext:Uint8Array,
+        opts:{
+            isLast:boolean,
+            contentDigest:Uint8Array,
+            recordSize?:number
+        }
+    ):Promise<Uint8Array> {
+        const mainKey = await this.mainKeyPromise
+        const salt = await deriveContentSalt(
+            mainKey,
+            opts.contentDigest
+        )
+        return eceEncryptRecord(
+            mainKey,
+            seq,
+            plaintext,
+            opts.isLast,
+            salt,
+            opts.recordSize ?? RECORD_SIZE
+        )
     }
 
     /**
