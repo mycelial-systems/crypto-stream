@@ -22,6 +22,7 @@ This uses the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/
 - [Fork](#fork)
 - [Example](#example)
   * [Example With Blobs](#example-with-blobs)
+- [Seek](#seek)
 - [API](#api)
   * [`new Keychain([key, [salt]])`](#new-keychainkey-salt)
   * [`keychain.key`](#keychainkey)
@@ -59,7 +60,10 @@ npm i -S @substrate-system/crypto-stream
 
 ## Fork
 
-This is a fork of [SocketDev/wormhole-crypto](https://github.com/SocketDev/wormhole-crypto). Thanks [@SocketDev](https://github.com/SocketDev) team for working in open source.
+This is a fork of
+[SocketDev/wormhole-crypto](https://github.com/SocketDev/wormhole-crypto).
+Thanks [@SocketDev](https://github.com/SocketDev) team for working in the
+world of open source.
 
 ## Example
 
@@ -103,6 +107,64 @@ function Component () {
     return html`<img src="${blobUrl}" />`
 }
 ```
+
+## Seek
+
+`crypto-stream` can seek on both sides of the cipher.
+
+Reads use
+[`decryptStreamRange`](#keychaindecryptstreamrangeoffset-length-totalencryptedlength),
+which decrypts an arbitrary byte range without reading the whole
+ciphertext. Writes use *reproducible, record-addressable* encryption: the
+same plaintext always encrypts to identical bytes, and you can regenerate
+any single record on demand without re-encrypting the rest. That is what
+lets a peer seed a large file (for example, over WebRTC) without buffering
+the whole ciphertext — hash the content once, then hand out individual
+records as they are requested.
+
+```js
+import { Keychain } from '@substrate-system/crypto-stream'
+import {
+    recordPlaintextSize,
+    recordCount
+} from '@substrate-system/crypto-stream/src/ece'
+
+const keychain = new Keychain()
+const data = new TextEncoder().encode('the quick brown fox')
+const rs = 1024  // record size; transport chunks line up with records
+
+// 1. Hash pass. The salt is derived from this digest, so it is bound
+//    to exactly this content (no AES-GCM nonce reuse).
+const digest = await keychain.contentDigest(data)
+
+// 2. Reproducible whole-stream encrypt. Re-encrypting `data` with the
+//    same digest yields byte-identical output.
+const encrypted = await keychain.encryptStream(new Response(data).body, {
+    contentDigest: digest,
+    recordSize: rs
+})
+
+// 3. Record-addressable: rebuild any single record on demand. The full
+//    ciphertext is `header || rec0 || rec1 || ... || recLast`.
+const head = await keychain.header({ contentDigest: digest, recordSize: rs })
+
+const max = recordPlaintextSize(rs)  // plaintext bytes per record
+const count = recordCount(data.length, rs)  // number of data records
+
+const i = 0
+const slice = data.subarray(i * max, (i + 1) * max)
+const record = await keychain.encryptRecord(i, slice, {
+    isLast: i === count - 1,
+    contentDigest: digest,
+    recordSize: rs
+})
+// `head || record` equals the first record of `encrypted`, byte for byte.
+```
+
+See
+[Reproducible & record-addressable encryption](#reproducible--record-addressable-encryption)
+for the safety model (why the salt is derived from the content) and the
+low-level building blocks.
 
 ## API
 
