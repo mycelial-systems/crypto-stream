@@ -46,6 +46,8 @@ This uses the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/
   * [`plaintextSize(encryptedSize)`](#plaintextsizeencryptedsize)
   * [`encryptedSize(plaintextSize)`](#encryptedsizeplaintextsize)
 - [Reproducible & record-addressable encryption](#reproducible--record-addressable-encryption)
+  * [Two-pass flow: hash, then encrypt](#two-pass-flow-hash-then-encrypt)
+  * [Low-level ECE building blocks](#low-level-ece-building-blocks)
 - [credits](#credits)
 
 <!-- tocstop -->
