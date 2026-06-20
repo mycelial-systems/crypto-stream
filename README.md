@@ -542,7 +542,7 @@ pass it to the encrypt functions:
 // 1. Hash pass
 const digest = await keychain.contentDigest(file.stream())
 
-// 2. Encrypt pass — reproducible: same input → identical ciphertext
+// 2. Encrypt pass — reproducible: same input -> identical ciphertext
 const encrypted = await keychain.encryptStream(file.stream(), {
     contentDigest: digest,
     recordSize: rs
@@ -554,7 +554,7 @@ const rec = await keychain.encryptRecord(i, sliceI, {
     contentDigest: digest,
     recordSize: rs
 })
-// Full ciphertext = header(21) || rec0 || rec1 || … || recLast
+// Full ciphertext = header(21) || rec0 || rec1 || ... || recLast
 const head = await keychain.header({
     contentDigest: digest,
     recordSize: rs
